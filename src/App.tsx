@@ -161,9 +161,31 @@ export const App: React.FC = () => {
   };
 
   const handleCompletedChange = (id: number) => {
-    setTodos(current =>
-      current.map(t => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    );
+    const currentTodo = todos.find(t => t.id === id);
+
+    if (!currentTodo) {
+      return;
+    }
+
+    const updatedTodo = { ...currentTodo, completed: !currentTodo.completed };
+
+    setTodos(current => current.map(t => (t.id === id ? updatedTodo : t)));
+
+    updateTodos({
+      id: updatedTodo.id,
+      title: updatedTodo.title,
+      userId: updatedTodo.userId,
+      completed: updatedTodo.completed,
+    }).then(response => {
+      setTodos(current => current.map(t => (t.id === id ? response : t))).catch(
+        () => {
+          setTodos(current =>
+            current.map(t => (t.id === id ? currentTodo : t)),
+          );
+          setError(Error.Update_todo);
+        },
+      );
+    });
   };
 
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,7 +194,7 @@ export const App: React.FC = () => {
 
   const handleToggling = () => {
     const allCompleted = todos.every(td => td.completed);
-    const allNotCompleted = todos.every(td => !td.completed);
+    const allNotCompleted = !allCompleted;
     const someCompleted = todos.some(td => td.completed);
 
     if (allCompleted || allNotCompleted) {
@@ -182,6 +204,37 @@ export const App: React.FC = () => {
     if (someCompleted && !allCompleted) {
       setTodos(todos.map(t => ({ ...t, completed: !allCompleted })));
     }
+
+    const updateRequests = todos.map(todo =>
+      updateTodos({
+        id: todo.id,
+        title: todo.title,
+        userId: todo.userId,
+        completed: allNotCompleted,
+      }),
+    );
+
+    Promise.allSettled(updateRequests)
+      .then(results => {
+        const hasRejected = results.some(r => r.status === 'rejected');
+
+        if (hasRejected) {
+          setError(Error.Update_todo);
+        }
+
+        const fulfilled = results
+          .filter(r => r.status === 'fulfilled')
+          .map(r => (r as PromiseFulfilledResult<Todo>).value);
+
+        if (fulfilled.length) {
+          setTodos(current =>
+            current.map(t => fulfilled.find(ft => ft.id === t.id) || t),
+          );
+        }
+      })
+      .catch(() => {
+        setError(Error.Update_todo);
+      });
   };
 
   const handleUpdate = (
