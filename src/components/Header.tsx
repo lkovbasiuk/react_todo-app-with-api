@@ -10,6 +10,7 @@ interface Props {
   handleTitleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isInputDisabled: boolean;
   handleToggling: () => void;
+  isLoading: boolean;
 }
 
 export const Header: React.FC<Props> = ({
@@ -20,18 +21,21 @@ export const Header: React.FC<Props> = ({
   handleTitleChange,
   isInputDisabled,
   handleToggling,
+  isLoading,
 }) => {
   return (
     <header className="todoapp__header">
       {/* this button should have `active` class only if all todos are completed */}
-      <button
-        type="button"
-        className={cn('todoapp__toggle-all', {
-          active: todos.every(todo => todo.completed),
-        })}
-        onClick={handleToggling}
-        data-cy="ToggleAllButton"
-      />
+      {!isLoading && todos.length > 0 && (
+        <button
+          type="button"
+          className={cn('todoapp__toggle-all', {
+            active: todos.every(todo => todo.completed),
+          })}
+          onClick={handleToggling}
+          data-cy="ToggleAllButton"
+        />
+      )}
 
       {/* Add a todo on form submit */}
       <form>

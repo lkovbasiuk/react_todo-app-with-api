@@ -54,7 +54,7 @@ export const TodoItem: React.FC<Props> = ({
 
       {isSelected?.id === todo.id && (
         <input
-          data-cy="TodoTitle"
+          data-cy="TodoTitleField"
           className="todo__title"
           type="text"
           onChange={e => setValue(e.target.value)}
@@ -62,6 +62,7 @@ export const TodoItem: React.FC<Props> = ({
           onKeyDown={e => handleUpdate(e, { ...todo, title: value })}
           onBlur={() => handleUpdate(null, { ...todo, title: value })}
           ref={inputRef}
+          disabled={loading}
         />
       )}
 

@@ -16,6 +16,7 @@ interface Props {
     e: React.KeyboardEvent<HTMLInputElement> | null,
     todo: Todo,
   ) => void;
+  updatingIds: number[];
 }
 
 export const TodoList: React.FC<Props> = ({
@@ -28,9 +29,14 @@ export const TodoList: React.FC<Props> = ({
   renamingTodo,
   isSelected,
   handleUpdate,
+  updatingIds,
 }) => {
   const visibleTodos = useMemo(() => {
     return todos.filter(todo => {
+      if (updatingIds.includes(todo.id)) {
+        return true;
+      }
+
       switch (filter) {
         case Filter.Active:
           return !todo.completed;
@@ -42,35 +48,28 @@ export const TodoList: React.FC<Props> = ({
           return true;
       }
     });
-  }, [todos, filter]);
+  }, [todos, filter, updatingIds]);
+
+  const todosToShow = tempTodo ? [...visibleTodos, tempTodo] : visibleTodos;
 
   return (
     <section className="todoapp__main" data-cy="TodoList">
-      {visibleTodos.map(todo => (
+      {todosToShow.map(todo => (
         <TodoItem
-          key={todo.id}
+          key={todo.id || 'temp'}
           todo={todo}
-          handleCompletedChange={handleCompletedChange}
-          deleteTodo={deleteTodo}
-          loading={deletedIds.includes(todo.id)}
-          renamingTodo={renamingTodo}
+          handleCompletedChange={tempTodo ? () => {} : handleCompletedChange}
+          deleteTodo={tempTodo ? () => {} : deleteTodo}
+          renamingTodo={tempTodo ? () => {} : renamingTodo}
           isSelected={isSelected}
           handleUpdate={handleUpdate}
+          loading={
+            todo.id === 0 ||
+            deletedIds.includes(todo.id) ||
+            updatingIds.includes(todo.id)
+          }
         />
       ))}
-
-      {tempTodo && (
-        <TodoItem
-          key="temp"
-          todo={tempTodo}
-          handleCompletedChange={() => {}}
-          loading={true}
-          deleteTodo={() => {}}
-          renamingTodo={() => {}}
-          isSelected={null}
-          handleUpdate={() => {}}
-        />
-      )}
     </section>
   );
 };

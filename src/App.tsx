@@ -28,6 +28,7 @@ export const App: React.FC = () => {
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [deletedIds, setDeletedIds] = useState<number[]>([]);
   const [isSelected, setIsSelected] = useState<Todo | null>(null);
+  const [updatingIds, setUpdatingIds] = useState<number[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -83,12 +84,14 @@ export const App: React.FC = () => {
   const deleteTodo = (id: number) => {
     setIsInputDisabled(true);
     setDeletedIds(prev => [...prev, id]);
-    deleteTodos(id)
+
+    return deleteTodos(id)
       .then(() => {
         setTodos(current => current.filter(t => t.id !== id));
       })
       .catch(() => {
         setError(Error.Delete_todo);
+        throw new Error('Delete failed');
       })
       .finally(() => {
         setDeletedIds(prev => prev.filter(d => d !== id));
@@ -129,18 +132,28 @@ export const App: React.FC = () => {
   };
 
   const updateTodo = (td: Todo) => {
-    setTodos(current => current.map(t => (t.id === td.id ? td : t)));
-    updateTodos({
+    setUpdatingIds(prev => [...prev, td.id]);
+
+    return updateTodos({
       title: td.title,
       userId: td.userId,
       completed: td.completed,
       id: td.id,
-    }).catch(() => {
-      setError(Error.Update_todo);
-      setTodos(current =>
-        current.map(t => (t.id === td.id ? { ...t, title: t.title } : t)),
-      );
-    });
+    })
+      .then(updatedTodo => {
+        setTodos(current =>
+          current.map(t => (t.id === td.id ? updatedTodo : t)),
+        );
+
+        return updatedTodo;
+      })
+      .catch(() => {
+        setError(Error.Update_todo);
+        throw err;
+      })
+      .finally(() => {
+        setUpdatingIds(prev => prev.filter(id => id !== td.id));
+      });
   };
 
   if (!USER_ID) {
@@ -169,6 +182,8 @@ export const App: React.FC = () => {
 
     const updatedTodo = { ...currentTodo, completed: !currentTodo.completed };
 
+    setUpdatingIds(prev => [...prev, id]);
+
     setTodos(current => current.map(t => (t.id === id ? updatedTodo : t)));
 
     updateTodos({
@@ -176,16 +191,17 @@ export const App: React.FC = () => {
       title: updatedTodo.title,
       userId: updatedTodo.userId,
       completed: updatedTodo.completed,
-    }).then(response => {
-      setTodos(current => current.map(t => (t.id === id ? response : t))).catch(
-        () => {
-          setTodos(current =>
-            current.map(t => (t.id === id ? currentTodo : t)),
-          );
-          setError(Error.Update_todo);
-        },
-      );
-    });
+    })
+      .then(response => {
+        setTodos(current => current.map(t => (t.id === id ? response : t)));
+      })
+      .catch(() => {
+        setTodos(current => current.map(t => (t.id === id ? currentTodo : t)));
+        setError(Error.Update_todo);
+      })
+      .finally(() => {
+        setUpdatingIds(prev => prev.filter(updId => updId !== id));
+      });
   };
 
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,17 +211,25 @@ export const App: React.FC = () => {
   const handleToggling = () => {
     const allCompleted = todos.every(td => td.completed);
     const allNotCompleted = !allCompleted;
-    const someCompleted = todos.some(td => td.completed);
+    let arrayForUpdate: Todo[] = [];
 
-    if (allCompleted || allNotCompleted) {
-      setTodos(todos.map(t => ({ ...t, completed: !t.completed })));
+    if (allCompleted) {
+      arrayForUpdate = todos.map(t => ({ ...t, completed: false }));
+    } else {
+      arrayForUpdate = todos
+        .filter(t => !t.completed)
+        .map(t => ({ ...t, completed: true }));
     }
 
-    if (someCompleted && !allCompleted) {
-      setTodos(todos.map(t => ({ ...t, completed: !allCompleted })));
-    }
+    setTodos(current =>
+      current.map(t => {
+        const updated = arrayForUpdate.find(u => u.id === t.id);
 
-    const updateRequests = todos.map(todo =>
+        return updated || t;
+      }),
+    );
+
+    const updateRequests = arrayForUpdate.map(todo =>
       updateTodos({
         id: todo.id,
         title: todo.title,
@@ -248,21 +272,32 @@ export const App: React.FC = () => {
     }
 
     if (!e || e.key === 'Enter' || e.type === 'blur') {
+      const trimmedTitle = todo.title.trim();
       const current = todos.find(t => t.id === todo.id);
 
-      if (current && current.title === todo.title.trim()) {
+      if (current && current.title === trimmedTitle) {
         setIsSelected(null);
 
         return;
       }
 
-      if (todo.title.trim().length === 0) {
-        deleteTodo(todo.id);
+      if (trimmedTitle.length === 0) {
+        deleteTodo(todo.id)
+          .then(() => {
+            setIsSelected(null);
+          })
+          .catch(() => {
+            setError(Error.Delete_todo);
+          });
       } else {
-        updateTodo(todo);
+        updateTodo({ ...todo, title: trimmedTitle })
+          .then(() => {
+            setIsSelected(null);
+          })
+          .catch(() => {
+            setError(Error.Update_todo);
+          });
       }
-
-      setIsSelected(null);
     }
   };
 
@@ -279,6 +314,7 @@ export const App: React.FC = () => {
           handleTitleChange={handleTitleChange}
           isInputDisabled={isInputDisabled}
           handleToggling={handleToggling}
+          isLoading={isLoading}
         />
 
         {!isLoading && (todos.length > 0 || tempTodo) && (
@@ -292,6 +328,7 @@ export const App: React.FC = () => {
             renamingTodo={setIsSelected}
             isSelected={isSelected}
             handleUpdate={handleUpdate}
+            updatingIds={updatingIds}
           />
         )}
 
